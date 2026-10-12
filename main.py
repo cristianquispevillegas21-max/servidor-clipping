@@ -2,6 +2,7 @@ import os
 import subprocess
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+import yt_dlp
 
 app = Flask(__name__)
 CORS(app)
@@ -11,7 +12,7 @@ os.makedirs(EXPORT_DIR, exist_ok=True)
 
 @app.route('/api/process-video', methods=['POST'])
 def process_video():
-    data = request.json
+    data = request.json or {}
     youtube_url = data.get('youtube_url')
     start_time = data.get('start_time')
     end_time = data.get('end_time')
@@ -21,20 +22,43 @@ def process_video():
         return jsonify({"error": "Faltan parámetros de entrada"}), 400
 
     output_path = os.path.join(EXPORT_DIR, output_name)
+    temp_input_path = os.path.join(EXPORT_DIR, "video_origen.mp4")
     duration = end_time - start_time
 
     try:
-        # Petición camuflada usando cliente Android para evitar bloqueos de IP en Render
-        cmd_yt = f'yt-dlp --extractor-args "youtube:player_client=android,web" -g -f "best[ext=mp4]/best" "{youtube_url}"'
-        stream_urls = subprocess.check_output(cmd_yt, shell=True).decode('utf-8').strip().split('\n')
-        video_stream_url = stream_urls[0]
+        # Eliminar descargas previas si existen
+        if os.path.exists(temp_input_path):
+            os.remove(temp_input_path)
 
+        # Configuración nativa de yt-dlp con emulación iOS/MWeb para evadir bloqueos de IP
+        ydl_opts = {
+            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'outtmpl': temp_input_path,
+            'quiet': True,
+            'no_warnings': True,
+            'nocheckcertificate': True,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['ios', 'mweb', 'android']
+                }
+            }
+        }
+
+        # Descargar el archivo fuente
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([youtube_url])
+
+        # Recortar y reencuadrar a 9:16 con FFmpeg
         ffmpeg_cmd = (
-            f'ffmpeg -y -ss {start_time} -i "{video_stream_url}" -t {duration} '
+            f'ffmpeg -y -ss {start_time} -i "{temp_input_path}" -t {duration} '
             f'-vf "crop=ih*(9/16):ih,scale=720:1280" -c:v libx264 -preset ultrafast '
             f'-c:a aac "{output_path}"'
         )
         subprocess.run(ffmpeg_cmd, shell=True, check=True)
+
+        # Limpiar el video fuente para liberar espacio
+        if os.path.exists(temp_input_path):
+            os.remove(temp_input_path)
 
         return jsonify({
             "status": "success",
