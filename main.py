@@ -30,10 +30,11 @@ def process_video():
         if os.path.exists(temp_input_path):
             os.remove(temp_input_path)
 
-        # Configuración nativa de yt-dlp con emulación iOS/MWeb para evadir bloqueos de IP
+        # Configuración de yt-dlp usando cookies.txt para autenticación
         ydl_opts = {
             'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             'outtmpl': temp_input_path,
+            'cookiefile': 'cookies.txt',  # Lee las cookies subidas a GitHub
             'quiet': True,
             'no_warnings': True,
             'nocheckcertificate': True,
@@ -44,7 +45,7 @@ def process_video():
             }
         }
 
-        # Descargar el archivo fuente
+        # Descargar el video usando la sesión de las cookies
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([youtube_url])
 
@@ -56,7 +57,7 @@ def process_video():
         )
         subprocess.run(ffmpeg_cmd, shell=True, check=True)
 
-        # Limpiar el video fuente para liberar espacio
+        # Limpiar el video origen para ahorrar espacio
         if os.path.exists(temp_input_path):
             os.remove(temp_input_path)
 
