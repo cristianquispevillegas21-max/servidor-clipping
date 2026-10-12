@@ -24,14 +24,15 @@ def process_video():
     duration = end_time - start_time
 
     try:
-        cmd_yt = f"yt-dlp -g -f 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]' {youtube_url}"
+        # Petición camuflada usando cliente Android para evitar bloqueos de IP en Render
+        cmd_yt = f'yt-dlp --extractor-args "youtube:player_client=android,web" -g -f "best[ext=mp4]/best" "{youtube_url}"'
         stream_urls = subprocess.check_output(cmd_yt, shell=True).decode('utf-8').strip().split('\n')
         video_stream_url = stream_urls[0]
 
         ffmpeg_cmd = (
-            f"ffmpeg -y -ss {start_time} -i \"{video_stream_url}\" -t {duration} "
-            f"-vf \"crop=ih*(9/16):ih,scale=720:1280\" -c:v libx264 -preset ultrafast "
-            f"-c:a aac {output_path}"
+            f'ffmpeg -y -ss {start_time} -i "{video_stream_url}" -t {duration} '
+            f'-vf "crop=ih*(9/16):ih,scale=720:1280" -c:v libx264 -preset ultrafast '
+            f'-c:a aac "{output_path}"'
         )
         subprocess.run(ffmpeg_cmd, shell=True, check=True)
 
@@ -41,7 +42,7 @@ def process_video():
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Error al procesar el video: {str(e)}"}), 500
 
 @app.route('/download/<filename>', methods=['GET'])
 def download_file(filename):
